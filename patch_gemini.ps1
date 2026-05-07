@@ -156,6 +156,27 @@ $patchRules = @(
         ReplaceTarget = '>\s*this\.bufferLimit'
         ReplaceWith = '>=this.bufferLimit'
         Filter = "devtoolsService*.js"
+    },
+    @{
+        Name = "Classifier Threshold (Routing)"
+        Match = 'const defaultValue = 90;'
+        ReplaceTarget = 'const defaultValue = 90;'
+        ReplaceWith = 'const defaultValue = 50;'
+        Filter = "*.js"
+    },
+    @{
+        Name = "History Search Window (Token Opt)"
+        Match = 'HISTORY_SEARCH_WINDOW(\d*) = 20;'
+        ReplaceTarget = 'HISTORY_SEARCH_WINDOW(\d*) = 20;'
+        ReplaceWith = 'HISTORY_SEARCH_WINDOW$1 = 10;'
+        Filter = "*.js"
+    },
+    @{
+        Name = "API Retry (Add POST)"
+        Match = 'var retryMethods = \["get", "put", "head", "delete", "options", "trace"\];'
+        ReplaceTarget = 'var retryMethods = \["get", "put", "head", "delete", "options", "trace"\];'
+        ReplaceWith = 'var retryMethods = ["get", "post", "put", "head", "delete", "options", "trace"];'
+        Filter = "*.js"
     }
 )
 
