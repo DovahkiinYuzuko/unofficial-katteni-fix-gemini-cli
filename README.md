@@ -26,7 +26,7 @@
 * Gemini CLI がグローバルインストールされていること（`npm install -g @google/gemini-cli`）
 
 ### 使い方
-1. 本リポジトリ（またはGist）から `patch_gemini.ps1` をダウンロードします。
+1. 本リポジトリから `patch_gemini.ps1` をダウンロードします。
 2. PowerShellを**管理者権限**で起動します。
 3. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
 ```powershell
