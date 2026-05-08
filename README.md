@@ -37,44 +37,114 @@
 ### 使い方（推奨）
 パッチを適用する前に、Gemini CLIを一度クリーンインストールすることを強く推奨します。
 
-1. **Gemini CLIの再インストール**:
+1. **Gemini CLIの再インストール**（クリーンな状態にするため）:
    ```powershell
    npm uninstall -g @google/gemini-cli
    npm install -g @google/gemini-cli
    ```
-2. 本リポジトリから `patch_gemini.ps1` をダウンロードし、**管理者権限**のPowerShellで実行します。
-   ```powershell
-   .\patch_gemini.ps1
-   ```
+2. 本リポジトリ（またはGist）から `patch_gemini.ps1` をダウンロードします。
+3. PowerShellを**管理者権限**で起動します。
+4. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
+```powershell
+.\patch_gemini.ps1
+```
+
+### オプション機能
+* **確認モード (Dry Run)**: 実際にファイルを書き換えずに、どのファイルが修正対象になるかを確認します。
+  ```powershell
+  .\patch_gemini.ps1 -DryRun
+  ```
+* **復元モード (Restore)**: パッチ適用時に自動作成されたバックアップ（`.bak`）から、ファイルを元の状態に戻します。
+  ```powershell
+  .\patch_gemini.ps1 -Restore
+  ```
+
+### 想定される問題とトラブルシューティング
+
+#### Q. 「スクリプトの実行がシステムで無効になっている」というエラーが出る
+PowerShellのセキュリティ設定により、ダウンロードしたスクリプトの実行がブロックされています。管理者権限のPowerShellで以下のコマンドを実行し、一時的に実行ポリシーを許可してください。
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope Process
+```
+
+#### Q. 「npmコマンドが見つからない」と表示される
+Node.jsがインストールされていないか、環境変数（PATH）に登録されていません。Node.jsをインストールし直すか、システムの環境変数設定を確認してください。
+
+#### Q. Gemini CLIをアップデートしたらバグが再発した
+`npm update -g @google/gemini-cli` などでCLIをアップデートすると、ファイルが公式の（バグを含んだ）状態に上書きされます。アップデート後は再度このパッチスクリプトを実行してください。
+
+### 免責事項
+本スクリプトは非公式のコミュニティパッチです。MITライセンスのもとで提供されており、「現状のまま」いかなる保証もなしに提供されます。本スクリプトの使用によって生じたデータの損失や環境の破損について、作成者は一切の責任を負いません。自己責任でご使用ください。
 
 ---
 
 ## English
 
 ### Overview
-This script (`patch_gemini.ps1`) is an unofficial hotfix for Gemini CLI on Windows. It addresses 13 critical reliability and performance issues by directly patching the compiled JavaScript bundle.
+This script (`patch_gemini.ps1`) is an unofficial hotfix to resolve critical bugs and performance issues with the Gemini CLI on Windows environments.
+It acts as a temporary workaround until official fixes are merged, by directly patching the compiled JavaScript bundle of your globally installed Gemini CLI.
 
-**PR:** [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
+**PR:**
+[https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
 
 ### What it Fixes
-1. **Slash Command Improvements**: Trims trailing whitespace to prevent commands from being incorrectly sent as prompts.
-2. **Proper Process Termination**: Implements `taskkill /F /T` for complete process tree termination with self-kill guards.
+1. **Slash Command Improvements**: Trims whitespace/newlines from commands like `/model` to prevent them from being incorrectly sent as prompts to the AI.
+2. **Proper Process Termination**: Fixes the issue where background processes remain active after cancellation by implementing Windows-native `taskkill /F /T` for complete process tree termination. Includes safety guards to prevent self-killing.
 3. **Enhanced API Retries**: Adds `POST` support to retry logic for improved network resilience.
-4. **Auto-Model Rotation**: Loops through Pro/Flash/Lite models automatically upon encountering 429 errors.
-5. **Dynamic Token Limits**: Automatically increases limits up to 10M for Gemini 3 models.
-6. **Improved UI Feedback**: Real-time status updates during model switching and backoff periods.
-7. **Real-time Log Flushing**: Buffer optimization ensuring `latest.log` updates immediately.
-8. **Subagent Circuit Breaker**: Stops subagents after 3 consecutive tool failures to prevent token waste.
-9. **Binary Injection Protocol**: New 3-turn protocol for stable multi-modal (image/file) processing.
-10. **Scheduler Hardening**: Prevents main agent hangs with 60s timeouts and loop iteration limits.
-11. **Subagent 429 Resilience**: Internal exponential backoff retry loop (up to 10 attempts) for subagents.
-12. **WriteFile Robustness**: Fallback to original content if AI-assisted correction fails.
-13. **Idempotent Patching**: Advanced regex guards preventing duplicate code insertion and `SyntaxError`s.
+4. **Auto-Model Selection Loop**: Improves the Auto mode fallback logic. Instead of stopping after one failed attempt, it now loops through available models (Pro/Flash/Lite) when encountering 429 (Quota) errors.
+5. **Dynamic Token Limit Expansion**: Automatically increases the CLI's internal token limit (from 1M up to 10M) when using next-gen models like Gemini 3, unlocking their full potential.
+6. **Improved Retry UI Feedback**: Provides real-time status updates in the terminal during model switching and backoff periods (e.g., "Switching from Flash to Pro due to availability issues...").
+7. **Real-time Log Flushing**: Optimizes log buffering so that `latest.log` is updated immediately, even for very short tasks.
+8. **Subagent Circuit Breaker**: Stops subagents after 3 consecutive tool failures to prevent repetitive errors and token waste.
+9. **Binary Injection Protocol**: New 3-turn injection protocol (Tool Response -> Synthetic Model Ack -> Binary Data) for stable multi-modal processing.
+10. **Scheduler Hardening**: Prevents main agent hangs with 60s timeouts and 1000-iteration loop limits.
+11. **Subagent 429 Resilience**: Internal exponential backoff retry loop (up to 10 attempts) specifically for subagent API calls.
+12. **WriteFile Robustness**: Fallback to original content if LLM-based file correction fails.
+13. **Idempotent Patching**: Advanced regex guards preventing duplicate code insertion and `SyntaxError`s when running the script multiple times.
+
+### Requirements
+* Windows 10 or Windows 11
+* Node.js and npm installed
+* Gemini CLI installed globally (`npm install -g @google/gemini-cli`)
 
 ### Usage (Recommended)
-1. **Reinstall Gemini CLI**:
+It is highly recommended to perform a clean installation of Gemini CLI before applying this patch.
+
+1. **Reinstall Gemini CLI** (to ensure a clean state):
    ```powershell
    npm uninstall -g @google/gemini-cli
    npm install -g @google/gemini-cli
    ```
-2. Run `patch_gemini.ps1` in **Administrator** PowerShell.
+2. Download `patch_gemini.ps1`.
+3. Open PowerShell as an **Administrator**.
+4. Navigate to the directory where the script is saved and run it:
+```powershell
+.\patch_gemini.ps1
+```
+
+### Options
+* **Dry Run**: Preview which files will be modified without actually changing them.
+  ```powershell
+  .\patch_gemini.ps1 -DryRun
+  ```
+* **Restore**: Revert the files to their original state using the automatically generated `.bak` backups.
+  ```powershell
+  .\patch_gemini.ps1 -Restore
+  ```
+
+### Troubleshooting
+
+#### Q. I get an error saying "execution of scripts is disabled on this system."
+PowerShell blocks the execution of downloaded scripts by default. Open PowerShell as an Administrator and run the following command to temporarily allow script execution:
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope Process
+```
+
+#### Q. I get an error saying "npm is not recognized."
+Node.js is either not installed or not in your system's PATH. Please install Node.js or check your environment variables.
+
+#### Q. The bugs came back after I updated the Gemini CLI.
+Updating the CLI (e.g., via `npm update -g @google/gemini-cli`) overwrites the patched files with the official codebase. You will need to run this patch script again after every update.
+
+### Disclaimer
+This is an unofficial community patch provided under the MIT License. It is provided "as is", without warranty of any kind. The author is not responsible for any data loss, system instability, or other damages resulting from the use of this script. Use at your own risk.
