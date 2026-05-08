@@ -42,7 +42,7 @@
    npm uninstall -g @google/gemini-cli
    npm install -g @google/gemini-cli
    ```
-2. 本リポジトリ（またはGist）から `patch_gemini.ps1` をダウンロードします。
+2. 本リポジトリから `patch_gemini.ps1` をダウンロードします。
 3. PowerShellを**管理者権限**で起動します。
 4. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
 ```powershell
