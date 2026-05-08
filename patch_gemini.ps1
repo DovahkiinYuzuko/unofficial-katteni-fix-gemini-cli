@@ -125,8 +125,8 @@ $patchRules = @(
     },
     @{
         Name = "Dynamic Token Limits (Gemini 3 Support)"
-        Match = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{'
-        ReplaceTarget = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{'
+        Match = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{\s*switch\s*\(\1\)\s*\{'
+        ReplaceTarget = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{\s*switch\s*\(\1\)\s*\{'
         ReplaceWith = 'function tokenLimit($1){if($1.includes("gemini-3"))return 10000000;switch($1){'
     },
     @{
