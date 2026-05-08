@@ -15,13 +15,13 @@
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
 
 ### 修正される問題
-1. **スラッシュコマンドの無効化バグ**: `/model` などのコマンドがAIへのプロンプトとして誤認識される問題を修正します。
-2. **起動時のハングアップ**: 起動時に数分間フリーズする問題（WMIスキャンのタイムアウト欠如）を修正し、起動を高速化します。
-3. **ゾンビプロセスの残留**: 実行をキャンセルした際に裏でプロセスが残り続ける問題を、Windows標準の `taskkill` を用いて物理的に終了させることで解決します。
-4. **ログの消失**: 短いタスクを実行した後にログが `latest.log` に書き出されない問題（バッファ制限）を修正し、即時書き出しに変更します。
-5. **モデル選択の自動ループ（Autoモード改善）**: 429エラー（レート制限）に遭遇した際、一方通行のフォールバックで止まらず、利用可能なモデル（Pro/Flash/Lite）を自動でループして再試行するようにします。
-6. **トークン上限の動的解放**: Gemini 3などの次世代モデルを使用する際、CLI側の制限（1M）を自動的に引き上げ（最大10M）、ポテンシャルをフル活用できるようにします。
-7. **リトライUIの改善**: モデル切り替えやバックオフ待機中に、現在の状況（「FlashからProに切り替え中」など）をUIにリアルタイムで表示し、不安を解消します。
+1. **スラッシュコマンドの改善**: `/model` などのコマンド末尾の空白や改行をトリムし、AIへの誤送信を確実に防ぎます。
+2. **ゾンビプロセスの完全終了**: 実行をキャンセルした際に裏でプロセスが残り続ける問題を、Windows標準の `taskkill /F /T` を用いてプロセスツリーごと物理的に終了させます。自分自身を殺さないための安全ガード付きです。
+3. **APIリトライの強化**: `GET` だけでなく `POST` リクエストもリトライ対象に追加し、ネットワークエラーへの耐性を高めました。
+4. **モデル選択の自動ループ（Autoモード改善）**: 429エラー（レート制限）に遭遇した際、一方通行のフォールバックで止まらず、利用可能なモデル（Pro/Flash/Lite）を自動でループして再試行するようにします。
+5. **トークン上限の動的解放**: Gemini 3などの次世代モデルを使用する際、CLI側の制限（1M）を自動的に引き上げ（最大10M）、ポテンシャルをフル活用できるようにします。
+6. **リトライUIの改善**: モデル切り替えやバックオフ待機中に、現在の状況（「FlashからProに切り替え中」など）をUIにリアルタイムで表示し、不安を解消します。
+7. **ログのリアルタイム書き出し**: 短いタスクでもログが即座に `latest.log` に反映されるよう、バッファ挙動を最適化しました。
 8. **二重適用防止ガード（等冪性の確保）**: パッチを複数回実行してもコードが重複して `SyntaxError` にならないよう、正規表現による高度なガードロジックを搭載しました。
 
 ### 動作要件
@@ -29,10 +29,17 @@
 * Node.js および npm がインストールされていること
 * Gemini CLI がグローバルインストールされていること（`npm install -g @google/gemini-cli`）
 
-### 使い方
-1. 本リポジトリ（またはGist）から `patch_gemini.ps1` をダウンロードします。
-2. PowerShellを**管理者権限**で起動します。
-3. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
+### 使い方（推奨）
+パッチを適用する前に、Gemini CLIを一度クリーンインストールすることを強く推奨します。
+
+1. **Gemini CLIの再インストール**（クリーンな状態にするため）:
+   ```powershell
+   npm uninstall -g @google/gemini-cli
+   npm install -g @google/gemini-cli
+   ```
+2. 本リポジトリから `patch_gemini.ps1` をダウンロードします。
+3. PowerShellを**管理者権限**で起動します。
+4. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
 ```powershell
 .\patch_gemini.ps1
 ```
@@ -76,20 +83,31 @@ It acts as a temporary workaround until official fixes are merged, by directly p
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
 
 ### What it Fixes
-1. **Slash Command Bug**: Fixes the issue where commands like `/model` are incorrectly sent as regular prompts to the AI.
-2. **Startup Hang**: Eliminates the multi-minute freeze on startup by adding a 5000ms timeout to WMI process scans.
-3. **Zombie Processes**: Fixes the issue where background processes remain active after cancellation by implementing Windows-native `taskkill` for proper process tree termination.
-4. **Missing Logs**: Resolves the issue where execution logs are not written to `latest.log` after short tasks by modifying the buffer limit to force immediate flushing.
+1. **Slash Command Improvements**: Trims whitespace/newlines from commands like `/model` to prevent them from being incorrectly sent as prompts to the AI.
+2. **Proper Process Termination**: Fixes the issue where background processes remain active after cancellation by implementing Windows-native `taskkill /F /T` for complete process tree termination. Includes safety guards to prevent self-killing.
+3. **Enhanced API Retries**: Adds `POST` requests to the retry logic (in addition to `GET`) to improve resilience against transient network errors.
+4. **Auto-Model Selection Loop**: Improves the Auto mode fallback logic. Instead of stopping after one failed attempt, it now loops through available models (Pro/Flash/Lite) when encountering 429 (Quota) errors.
+5. **Dynamic Token Limit Expansion**: Automatically increases the CLI's internal token limit (from 1M up to 10M) when using next-gen models like Gemini 3, unlocking their full potential.
+6. **Improved Retry UI Feedback**: Provides real-time status updates in the terminal during model switching and backoff periods (e.g., "Switching from Flash to Pro due to availability issues...").
+7. **Real-time Log Flushing**: Optimizes log buffering so that `latest.log` is updated immediately, even for very short tasks.
+8. **Idempotent Patching**: Implemented advanced regex guards to prevent duplicate code insertion and `SyntaxError`s when running the script multiple times.
 
 ### Requirements
 * Windows 10 or Windows 11
 * Node.js and npm installed
 * Gemini CLI installed globally (`npm install -g @google/gemini-cli`)
 
-### Usage
-1. Download `patch_gemini.ps1`.
-2. Open PowerShell as an **Administrator**.
-3. Navigate to the directory where the script is saved and run it:
+### Usage (Recommended)
+It is highly recommended to perform a clean installation of Gemini CLI before applying this patch.
+
+1. **Reinstall Gemini CLI** (to ensure a clean state):
+   ```powershell
+   npm uninstall -g @google/gemini-cli
+   npm install -g @google/gemini-cli
+   ```
+2. Download `patch_gemini.ps1`.
+3. Open PowerShell as an **Administrator**.
+4. Navigate to the directory where the script is saved and run it:
 ```powershell
 .\patch_gemini.ps1
 ```
