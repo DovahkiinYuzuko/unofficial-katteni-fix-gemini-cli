@@ -99,14 +99,14 @@ $patchRules = @(
     # Existing PR fixes
     @{
         Name = "Slash Commands Trim"
-        Match = '([a-zA-Z0-9_$]+)\.startsWith\("\/"\)'
-        ReplaceTarget = '([a-zA-Z0-9_$]+)\.startsWith\("\/"\)'
+        Match = '(?<!\.trim\(\))\.startsWith\("\/"\)'
+        ReplaceTarget = '([a-zA-Z0-9_$]+)\.(?!trim\(\)\.)startsWith\("\/"\)'
         ReplaceWith = '$1.trim().startsWith("/")'
     },
     @{
         Name = "Zombie Process (SIGKILL/SIGTERM) with Guard"
-        Match = 'process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
-        ReplaceTarget = 'process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
+        Match = '(?<!pid===process\.pid\|\|pid===process\.ppid\?undefined:)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
+        ReplaceTarget = '(?<!pid===process\.pid\|\|pid===process\.ppid\?undefined:)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
         ReplaceWith = '(pid===process.pid||pid===process.ppid?undefined:process.platform==="win32"?require("child_process").spawnSync("taskkill",["/F","/T","/PID",pid.toString()]):process.kill(-pid,$1))'
     },
     @{
@@ -125,8 +125,8 @@ $patchRules = @(
     },
     @{
         Name = "Dynamic Token Limits (Gemini 3 Support)"
-        Match = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{\s*switch\s*\(\1\)\s*\{'
-        ReplaceTarget = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{\s*switch\s*\(\1\)\s*\{'
+        Match = 'function tokenLimit\([a-zA-Z0-9_$]+\)\s*\{\s*(?!if\(.*\.includes\("gemini-3"\)\))'
+        ReplaceTarget = 'function tokenLimit\(([a-zA-Z0-9_$]+)\)\s*\{\s*(?!if\(.*\.includes\("gemini-3"\)\))switch\s*\(\$1\)\s*\{'
         ReplaceWith = 'function tokenLimit($1){if($1.includes("gemini-3"))return 10000000;switch($1){'
     },
     @{
@@ -137,20 +137,20 @@ $patchRules = @(
     },
     @{
         Name = "Retry UI Feedback (Model Switching Message)"
-        Match = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{'
-        ReplaceTarget = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{'
+        Match = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)'
+        ReplaceTarget = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)'
         ReplaceWith = 'onRetry: ($1) => { const isModelChanged = getDisplayString(currentAttemptModel) !== getDisplayString(modelConfigKey.model); const message = isModelChanged ? `Switching to ${getDisplayString(currentAttemptModel)} due to availability issues...` : undefined;'
     },
     @{
         Name = "Retry Payload Expansion (Emit Message)"
-        Match = 'model:\s*getDisplayString\(currentAttemptModel\)'
-        ReplaceTarget = 'model:\s*getDisplayString\(currentAttemptModel\)'
+        Match = 'model:\s*getDisplayString\(currentAttemptModel\)(?!,\s*message)'
+        ReplaceTarget = 'model:\s*getDisplayString\(currentAttemptModel\)(?!,\s*message)'
         ReplaceWith = 'model: getDisplayString(currentAttemptModel), message'
     },
     @{
         Name = "UI Loader Message Support"
-        Match = 'retryStatus\.attempt\s*>=\s*[A-Z_]+_RETRY_HINT_ATTEMPT_THRESHOLD\s*\?\s*"[^"]*"\s*:\s*null'
-        ReplaceTarget = 'retryStatus\.attempt\s*>=\s*[A-Z_]+_RETRY_HINT_ATTEMPT_THRESHOLD\s*\?\s*"[^"]*"\s*:\s*null'
+        Match = '(?<!retryStatus\.message \? retryStatus\.message : )retryStatus\.attempt\s*>=\s*[A-Z_]+_RETRY_HINT_ATTEMPT_THRESHOLD\s*\?\s*"[^"]*"\s*:\s*null'
+        ReplaceTarget = '(?<!retryStatus\.message \? retryStatus\.message : )retryStatus\.attempt\s*>=\s*[A-Z_]+_RETRY_HINT_ATTEMPT_THRESHOLD\s*\?\s*"[^"]*"\s*:\s*null'
         ReplaceWith = 'retryStatus.message ? retryStatus.message : $&'
     }
 )
