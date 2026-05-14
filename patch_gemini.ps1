@@ -282,7 +282,7 @@ foreach ($file in $targetFiles) {
     $originalContent = $content
     $filePatched = $false
 
-    $content = Apply-PatchRulesToText $content
+    $content = Update-PatchRulesToText $content
     $filePatched = $originalContent -ne $content
 
     if ($filePatched -and ($originalContent -ne $content)) {
