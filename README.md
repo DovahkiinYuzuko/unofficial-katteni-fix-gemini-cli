@@ -15,7 +15,7 @@
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
 
 ### 修正される問題
-1. **スラッシュコマンドの改善**: `/model` などのコマンド末尾の空白や改行をトリムし、AIへの誤送信を確実に防ぎます。
+1. **スラッシュコマンドの改善**: `/model` などのコマンド末尾の空白や改行をトリムし、v0.42.0以降で未ロード・未知のスラッシュコマンドがAIへ誤送信される経路をガードします。
 2. **ゾンビプロセスの完全終了**: 実行キャンセル時に裏でプロセスが残り続ける問題を、Windows標準の `taskkill /F /T` で解決。自己殺害防止ガード付きです。
 3. **APIリトライの強化**: `GET` に加え `POST` リクエストもリトライ対象とし、ネットワーク耐性を向上。
 4. **モデル選択の自動ループ（Autoモード改善）**: 429エラー時にモデル（Pro/Flash/Lite）を自動でローテーションして継続させます。
@@ -42,7 +42,7 @@
    npm uninstall -g @google/gemini-cli
    npm install -g @google/gemini-cli
    ```
-2. 本リポジトリ（またはGist）から `patch_gemini.ps1` をダウンロードします。
+2. 本リポジトリから `patch_gemini.ps1` をダウンロードします。
 3. PowerShellを**管理者権限**で起動します。
 4. スクリプトが保存されているディレクトリに移動し、スクリプトを実行します。
 ```powershell
@@ -57,6 +57,10 @@
 * **復元モード (Restore)**: パッチ適用時に自動作成されたバックアップ（`.bak`）から、ファイルを元の状態に戻します。
   ```powershell
   .\patch_gemini.ps1 -Restore
+  ```
+* **セルフテスト (Self Test)**: v0.42.0向けのスラッシュコマンド修正ルールが現在のスクリプト内で正しく適用・再適用できるかを検証します。
+  ```powershell
+  .\patch_gemini.ps1 -SelfTest
   ```
 
 ### 想定される問題とトラブルシューティング
@@ -88,7 +92,7 @@ It acts as a temporary workaround until official fixes are merged, by directly p
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
 
 ### What it Fixes
-1. **Slash Command Improvements**: Trims whitespace/newlines from commands like `/model` to prevent them from being incorrectly sent as prompts to the AI.
+1. **Slash Command Improvements**: Trims whitespace/newlines from commands like `/model` and guards the v0.42.0+ paths where unloaded or unknown slash commands can fall through to the AI as normal prompts.
 2. **Proper Process Termination**: Fixes the issue where background processes remain active after cancellation by implementing Windows-native `taskkill /F /T` for complete process tree termination. Includes safety guards to prevent self-killing.
 3. **Enhanced API Retries**: Adds `POST` support to retry logic for improved network resilience.
 4. **Auto-Model Selection Loop**: Improves the Auto mode fallback logic. Instead of stopping after one failed attempt, it now loops through available models (Pro/Flash/Lite) when encountering 429 (Quota) errors.
@@ -130,6 +134,10 @@ It is highly recommended to perform a clean installation of Gemini CLI before ap
 * **Restore**: Revert the files to their original state using the automatically generated `.bak` backups.
   ```powershell
   .\patch_gemini.ps1 -Restore
+  ```
+* **Self Test**: Verifies that the v0.42.0 slash-command patch rules apply cleanly and remain idempotent.
+  ```powershell
+  .\patch_gemini.ps1 -SelfTest
   ```
 
 ### Troubleshooting

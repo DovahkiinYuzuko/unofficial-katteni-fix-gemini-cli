@@ -9,15 +9,17 @@ Features:
 - Dynamic token limits (Up to 10M for Gemini 3)
 - Enhanced UI feedback during retries
 - Safe process termination (Taskkill with self-kill protection)
+- Slash Command Guard (Safe version)
 
-Tested on: Gemini CLI v0.41.2
+Tested on: Gemini CLI v0.42.0
 License: MIT
 Maintainer: DovahkiinYuzuko
 #>
 
 param(
     [switch]$Restore,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$SelfTest
 )
 
 $ErrorActionPreference = "Stop"
@@ -96,18 +98,44 @@ $totalApplied = 0
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 
 $patchRules = @(
-    # Existing PR fixes
+    # --- Slash Command Fixes (Updated & Safe) ---
     @{
-        Name = "Slash Commands Trim"
-        Match = '(?<!\.trim\(\))\.startsWith\("\/"\)'
-        ReplaceTarget = '([a-zA-Z0-9_$]+)\.(?!trim\(\)\.)startsWith\("\/"\)'
+        Name = "Slash Commands Loading Guard (v0.42+)"
+        Match = 'if \(!commands\) \{\s*return false;\s*\}\s*if \(typeof rawQuery !== "string"\)'
+        ReplaceTarget = 'if \(!commands\) \{\s*return false;\s*\}\s*if \(typeof rawQuery !== "string"\)'
+        ReplaceWith = 'if (!commands) { if (typeof rawQuery === "string" && (rawQuery.trim().startsWith("/") || rawQuery.trim().startsWith("?"))) { addItem({ type: "error", text: "Slash commands are still loading. Please try again in a moment." }, Date.now()); return { type: "handled" }; } return false; } if (typeof rawQuery !== "string")'
+    },
+    @{
+        Name = "Slash Commands Unknown Guard (v0.42+)"
+        Match = 'if \(!commandToExecute\) \{[\s\S]*?if \(isMcpLoading\) \{[\s\S]*?return \{ type: "handled" \};\s*\}\s*return false;\s*\}\s*setIsProcessing\(true\);'
+        ReplaceTarget = '(if \(!commandToExecute\) \{[\s\S]*?if \(isMcpLoading\) \{[\s\S]*?return \{ type: "handled" \};\s*\}\s*)return false;(\s*\}\s*setIsProcessing\(true\);)'
+        ReplaceWith = '$1setIsProcessing(true); if (addToHistory) { addItem({ type: "user", text: trimmed }, Date.now()); } addMessage({ type: "error", content: `Unknown command: ${trimmed}`, timestamp: new Date() }); setIsProcessing(false); return { type: "handled" };$2'
+    },
+    @{
+        Name = "Slash Commands Detection Trim"
+        Match = '(?<!\.trim\(\))\.startsWith\(["'']\/["'']\)'
+        ReplaceTarget = '([a-zA-Z0-9_$]+)\.(?!trim\(\)\.)startsWith\(["'']\/["'']\)'
         ReplaceWith = '$1.trim().startsWith("/")'
     },
     @{
-        Name = "Zombie Process (SIGKILL/SIGTERM) with Guard"
-        Match = '(?<!pid===process\.pid\|\|pid===process\.ppid\?undefined:)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
-        ReplaceTarget = '(?<!pid===process\.pid\|\|pid===process\.ppid\?undefined:)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)'
+        Name = "Slash Commands Execution Guard (Fix)"
+        Match = '(?<!function\s+)handleSlashCommand\(([a-zA-Z0-9_$.]+)(?=[,\)])'
+        ReplaceTarget = 'handleSlashCommand\(([a-zA-Z0-9_$.]+)(?=[,\)])'
+        ReplaceWith = 'handleSlashCommand($1.trim()'
+    },
+
+    # --- Existing PR fixes ---
+    @{
+        Name = "Zombie Process Duplicate Cleanup"
+        Match = '\((?:pid===process\.pid\|\|pid===process\.ppid\?undefined:process\.platform==="win32"\?require\("child_process"\)\.spawnSync\("taskkill",\["/F","/T","/PID",pid\.toString\(\)\]\):\(?)+process\.kill\(-pid,(initialSignal|"SIGKILL")\)(?:\))+'
+        ReplaceTarget = '\((?:pid===process\.pid\|\|pid===process\.ppid\?undefined:process\.platform==="win32"\?require\("child_process"\)\.spawnSync\("taskkill",\["/F","/T","/PID",pid\.toString\(\)\]\):\(?)+process\.kill\(-pid,(initialSignal|"SIGKILL")\)(?:\))+'
         ReplaceWith = '(pid===process.pid||pid===process.ppid?undefined:process.platform==="win32"?require("child_process").spawnSync("taskkill",["/F","/T","/PID",pid.toString()]):process.kill(-pid,$1))'
+    },
+    @{
+        Name = "Zombie Process (SIGKILL/SIGTERM) with Guard"
+        Match = '(?m)^(?!.*taskkill)(.*)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)(.*)$'
+        ReplaceTarget = '(?m)^(?!.*taskkill)(.*)process\.kill\(-pid,\s*(initialSignal|"SIGKILL")\)(.*)$'
+        ReplaceWith = '$1(pid===process.pid||pid===process.ppid?undefined:process.platform==="win32"?require("child_process").spawnSync("taskkill",["/F","/T","/PID",pid.toString()]):process.kill(-pid,$2))$3'
     },
     @{
         Name = "API Retry (Add POST)"
@@ -116,7 +144,7 @@ $patchRules = @(
         ReplaceWith = 'var retryMethods = ["get", "post", "put", "head", "delete", "options", "trace"];'
     },
 
-    # New Yuzuko Edition fixes
+    # --- New Yuzuko Edition fixes ---
     @{
         Name = "Model Selection Loop (Auto-Fallback)"
         Match = 'resolvePolicyChain\(([a-zA-Z0-9_$]+),\s*([a-zA-Z0-9_$]+)\)(?!\s*,\s*true)'
@@ -137,9 +165,15 @@ $patchRules = @(
     },
     @{
         Name = "Retry UI Feedback (Model Switching Message)"
-        Match = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)'
-        ReplaceTarget = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)'
+        Match = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)(?=const actualMaxAttempts)'
+        ReplaceTarget = 'onRetry:\s*\((attempt,\s*error[a-zA-Z0-9_$]*,\s*delayMs)\)\s*=>\s*\{\s*(?!const isModelChanged)(?=const actualMaxAttempts)'
         ReplaceWith = 'onRetry: ($1) => { const isModelChanged = getDisplayString(currentAttemptModel) !== getDisplayString(modelConfigKey.model); const message = isModelChanged ? `Switching to ${getDisplayString(currentAttemptModel)} due to availability issues...` : undefined;'
+    },
+    @{
+        Name = "Retry UI Feedback Duplicate Cleanup"
+        Match = '(const isModelChanged = getDisplayString\(currentAttemptModel\) !== getDisplayString\(modelConfigKey\.model\); const message = isModelChanged \? `Switching to \$\{getDisplayString\(currentAttemptModel\)\} due to availability issues\.\.\.` : undefined;\s*){2,}'
+        ReplaceTarget = '(const isModelChanged = getDisplayString\(currentAttemptModel\) !== getDisplayString\(modelConfigKey\.model\); const message = isModelChanged \? `Switching to \$\{getDisplayString\(currentAttemptModel\)\} due to availability issues\.\.\.` : undefined;\s*){2,}'
+        ReplaceWith = 'const isModelChanged = getDisplayString(currentAttemptModel) !== getDisplayString(modelConfigKey.model); const message = isModelChanged ? `Switching to ${getDisplayString(currentAttemptModel)} due to availability issues...` : undefined; '
     },
     @{
         Name = "Retry Payload Expansion (Emit Message)"
@@ -155,6 +189,88 @@ $patchRules = @(
     }
 )
 
+function Update-PatchRulesToText {
+    param([string]$Content)
+
+    foreach ($rule in $patchRules) {
+        if ($Content -match $rule.Match) {
+            $Content = $Content -replace $rule.ReplaceTarget, $rule.ReplaceWith
+        }
+    }
+
+    return $Content
+}
+
+function Assert-SelfTest {
+    param(
+        [string]$Name,
+        [bool]$Condition
+    )
+
+    if (-not $Condition) {
+        throw "[SELFTEST] FAILED: $Name"
+    }
+
+    Write-Host "[SELFTEST] PASS: $Name" -ForegroundColor Green
+}
+
+if ($SelfTest) {
+    Write-Host "`n[SELFTEST] Running bundled patch rule checks..." -ForegroundColor Cyan
+
+    $loadingGuardFixture = @'
+if (!commands) {
+        return false;
+      }
+      if (typeof rawQuery !== "string") {
+        return false;
+      }
+'@
+    $patchedLoadingGuard = Apply-PatchRulesToText $loadingGuardFixture
+    Assert-SelfTest "slash command loading guard is inserted" ($patchedLoadingGuard -match 'Slash commands are still loading')
+    Assert-SelfTest "slash command loading guard is idempotent" ((Apply-PatchRulesToText $patchedLoadingGuard) -eq $patchedLoadingGuard)
+
+    $unknownGuardFixture = @'
+if (!commandToExecute) {
+        const isMcpLoading = config?.getMcpClientManager()?.getDiscoveryState() === "in_progress" /* IN_PROGRESS */;
+        if (isMcpLoading) {
+          setIsProcessing(true);
+          if (addToHistory) {
+            addItem({ type: "user" /* USER */, text: trimmed }, Date.now());
+          }
+          addMessage({
+            type: "error" /* ERROR */,
+            content: `Unknown command: ${trimmed}. Command might have been from an MCP server but MCP servers are not done loading.`,
+            timestamp: /* @__PURE__ */ new Date()
+          });
+          setIsProcessing(false);
+          return { type: "handled" };
+        }
+        return false;
+      }
+      setIsProcessing(true);
+'@
+    $patchedUnknownGuard = Apply-PatchRulesToText $unknownGuardFixture
+    Assert-SelfTest "unknown slash command guard is inserted" ($patchedUnknownGuard -match 'content: `Unknown command: \$\{trimmed\}`')
+    Assert-SelfTest "unknown slash command guard removes false fallthrough" ($patchedUnknownGuard -notmatch 'return false;\s*\}\s*setIsProcessing\(true\);')
+    Assert-SelfTest "unknown slash command guard is idempotent" ((Apply-PatchRulesToText $patchedUnknownGuard) -eq $patchedUnknownGuard)
+
+    $retryDuplicateFixture = @'
+onRetry: (attempt, error40, delayMs) => { const isModelChanged = getDisplayString(currentAttemptModel) !== getDisplayString(modelConfigKey.model); const message = isModelChanged ? `Switching to ${getDisplayString(currentAttemptModel)} due to availability issues...` : undefined; const isModelChanged = getDisplayString(currentAttemptModel) !== getDisplayString(modelConfigKey.model); const message = isModelChanged ? `Switching to ${getDisplayString(currentAttemptModel)} due to availability issues...` : undefined;const actualMaxAttempts = getAvailabilityContext()?.policy.maxAttempts ?? maxAttempts ?? DEFAULT_MAX_ATTEMPTS2;
+'@
+    $patchedRetryDuplicate = Apply-PatchRulesToText $retryDuplicateFixture
+    Assert-SelfTest "retry UI duplicate declarations are collapsed" (([regex]::Matches($patchedRetryDuplicate, 'const isModelChanged =')).Count -eq 1)
+    Assert-SelfTest "retry UI duplicate cleanup is idempotent" ((Apply-PatchRulesToText $patchedRetryDuplicate) -eq $patchedRetryDuplicate)
+
+    $zombieDuplicateFixture = '      (pid===process.pid||pid===process.ppid?undefined:process.platform==="win32"?require("child_process").spawnSync("taskkill",["/F","/T","/PID",pid.toString()]):(pid===process.pid||pid===process.ppid?undefined:process.platform==="win32"?require("child_process").spawnSync("taskkill",["/F","/T","/PID",pid.toString()]):process.kill(-pid,initialSignal)));'
+    $patchedZombieDuplicate = Apply-PatchRulesToText $zombieDuplicateFixture
+    Assert-SelfTest "zombie process duplicate wrappers are collapsed" (([regex]::Matches($patchedZombieDuplicate, 'spawnSync\("taskkill"')).Count -eq 1)
+    Assert-SelfTest "zombie process patch is idempotent" ((Apply-PatchRulesToText $patchedZombieDuplicate) -eq $patchedZombieDuplicate)
+
+    Write-Host "[SELFTEST] All checks passed." -ForegroundColor Magenta
+    Write-Output "[SELFTEST] OK"
+    exit 0
+}
+
 if ($DryRun) {
     Write-Host "[INFO] Running in DRY-RUN mode.`n" -ForegroundColor Yellow
 }
@@ -166,12 +282,8 @@ foreach ($file in $targetFiles) {
     $originalContent = $content
     $filePatched = $false
 
-    foreach ($rule in $patchRules) {
-        if ($content -match $rule.Match) {
-            $content = $content -replace $rule.ReplaceTarget, $rule.ReplaceWith
-            $filePatched = $true
-        }
-    }
+    $content = Apply-PatchRulesToText $content
+    $filePatched = $originalContent -ne $content
 
     if ($filePatched -and ($originalContent -ne $content)) {
         if (-not $DryRun) {
