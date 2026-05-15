@@ -9,7 +9,7 @@
 
 ### 概要
 このスクリプト（`patch_gemini.ps1`）は、Windows環境における Gemini CLI の動作不良やパフォーマンスの問題を解決するための非公式パッチです。
-公式リポジトリに修正がマージされるまでの間の「応急処置」として作成されました。npmでグローバルインストールされたGemini CLIのビルド済みファイルを直接修正し、計13項目の重要な改善を適用します。
+公式リポジトリに修正がマージされるまでの間の「応急処置」として作成されました。npmでグローバルインストールされたGemini CLIのビルド済みファイルを直接修正し、計15項目の重要な改善を適用します。
 
 **プルリクエスト:**
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
@@ -28,6 +28,8 @@
 11. **サブエージェントの429耐性**: サブエージェント側でも最大10回までの指数バックオフ付き自動リトライを実行します。
 12. **WriteFileの信頼性向上**: AIによる自動修正が失敗した場合でも、オリジナル内容で書き込むフォールバックを実装。
 13. **二重適用防止ガード（等冪性の確保）**: パッチを何度実行しても `SyntaxError` にならない高度な正規表現ガードを搭載。
+14. **スラッシュコマンドのハング解消**: Windowsのプロセス取得を高速化し、キャッシュと非同期ロードを導入。起動時の無限ロードを完全に防止します。
+15. **コマンドローダーの堅牢化（Fail-Soft）**: 個別のコマンド生成に例外保護を追加。一部のコマンドが万が一失敗しても、他の主要コマンドは正常に動作し続けます。
 
 ### 動作要件
 * Windows 10 または Windows 11
@@ -86,7 +88,7 @@ Node.jsがインストールされていないか、環境変数（PATH）に登
 
 ### Overview
 This script (`patch_gemini.ps1`) is an unofficial hotfix to resolve critical bugs and performance issues with the Gemini CLI on Windows environments.
-It acts as a temporary workaround until official fixes are merged, by directly patching the compiled JavaScript bundle of your globally installed Gemini CLI.
+It acts as a temporary workaround until official fixes are merged, by directly patching the compiled JavaScript bundle of your globally installed Gemini CLI. It applies a total of 15 critical improvements.
 
 **PR:**
 [https://github.com/google-gemini/gemini-cli/pull/26392](https://github.com/google-gemini/gemini-cli/pull/26392)
@@ -105,6 +107,8 @@ It acts as a temporary workaround until official fixes are merged, by directly p
 11. **Subagent 429 Resilience**: Internal exponential backoff retry loop (up to 10 attempts) specifically for subagent API calls.
 12. **WriteFile Robustness**: Fallback to original content if LLM-based file correction fails.
 13. **Idempotent Patching**: Advanced regex guards preventing duplicate code insertion and `SyntaxError`s when running the script multiple times.
+14. **Slash Command Hang Resolution**: Implements high-speed process discovery with caching and non-blocking loading on Windows, preventing infinite startup hangs.
+15. **Fail-Soft Command Loader**: Adds exception protection to individual command generation, ensuring core commands remain functional even if specific extensions fail.
 
 ### Requirements
 * Windows 10 or Windows 11
