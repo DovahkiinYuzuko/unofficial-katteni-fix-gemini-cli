@@ -1,6 +1,6 @@
 *
 
 !.gitignore
-!*.ps1
+!*.js
 !README.md
 !LICENSE
